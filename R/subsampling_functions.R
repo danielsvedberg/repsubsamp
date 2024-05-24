@@ -3,10 +3,22 @@ library(lubridate) #library important for managing date-time data
 library(stringr)
 library(fitdistrplus)
 library(philentropy)
-library(bettermc)
+library(parallel)
+#library(bettermc)
 library(MASS)
 library(minpack.lm)
 
+
+#' get multinom params
+#'
+#' This function gets the multinomial distribution parameters for each unique
+#' category in col
+#' @param col is a dataframe column you want to get parameters for
+#' @return params, a dataframe with a column containing each category in col, and the rate of each category in the rate column
+#' @keywords params
+#' @export
+#' @examples
+#' get_multinom_params()
 get_multinom_params = function(col){
   len = length(col)
   df = data.frame(x = col)
@@ -17,6 +29,10 @@ get_multinom_params = function(col){
   params = setNames(df$rate,df$x)
   return(params)
 }
+
+#' get_grouped_norm_params
+#'
+#' This function returns the normal distribution for each unique
 
 get_grouped_norm_params = function(col){
   len = length(col)
@@ -56,9 +72,20 @@ get_gamma_params = function(col){
   return(params)
 }
 
+get_poiss_params = function(col){
+  lambda = mean(col, na.rm = TRUE)
+  params = c('lambda' = lambda)
+  return(params)
+}
+
 #get LR returns Likelihood Ratio of L(fullcol)/l(fullcol), where L is the PDF built on fullcol data, and l is built on subcol data
 getLikeParams= function(col, type){
-  prmsfuns = list(groupednorm = get_grouped_norm_params, gamma = get_gamma_params, binom = get_binom_params, norm = get_norm_params, multinom = get_multinom_params) 
+  prmsfuns = list(poiss = get_poiss_params,
+                  groupednorm = get_grouped_norm_params,
+                  gamma = get_gamma_params,
+                  binom = get_binom_params,
+                  norm = get_norm_params,
+                  multinom = get_multinom_params)
   fun = prmsfuns[[type]]
   prms = fun(col)
   return(prms)
@@ -89,7 +116,7 @@ dgroupnormLogLike = function(col, params){
   d = data.frame(x = col)
   d = d %>%
     group_by(x) %>%
-    summarise(prop = n()/len) 
+    summarise(prop = n()/len)
   like = dnorm(d$prop, params[1],params[2], log = TRUE)
   return(like)
 }
@@ -99,14 +126,20 @@ dnormLogLike = function(col,params){
   return(like)
 }
 
+dpoissLogLike = function(col, params){
+  like = sum(log((params[1]^col * exp(-params[1])) / factorial(col)))
+  return(like)
+}
+
 getLogLike = function(col,params,type){
   if(all(!is.na(params))){
     dnormlog = function() dnormLogLike(col, params)
     dmultinomlog = function() dmultinomLogLike(col,params)
     dgamlog = function() dgammaLogLike(col, params)
     dbinomlog = function() dbinomLogLike(col, params)
+    dpoisslog = function() dpoissLogLike(col, params)
     dgroupnormlog = function() dgroupnormLogLike(col, params)
-    lffuns = list(gamma = dgamlog, binom = dbinomlog, norm = dnormlog, multinom = dmultinomlog, groupednorm = dgroupnormlog)
+    lffuns = list(gamma = dgamlog, binom = dbinomlog, norm = dnormlog, multinom = dmultinomlog, groupednorm = dgroupnormlog, poiss = dpoisslog)
     like = lffuns[[type]]()
     return(like)
   } else{
@@ -125,7 +158,7 @@ dgroupedNormlogProb = function(col,params){
   d = data.frame(x = col)
   d = d %>%
     group_by(x) %>%
-    summarise(prop = n()/len) 
+    summarise(prop = n()/len)
   like = dnorm(unique(d$prop), params[1],params[2])
   prob = log(normalize(like))
   return(prob)
@@ -166,11 +199,11 @@ getProb = function(col,params,type){
     gamProb = function() dgammalogProb(col, params)
     multinomProb = function() return(log(params))
     binomProb = function() dbinomlogProb(params)
-    
+
     lffuns = list(norm = normProb,
                   groupednorm = groupnormProb,
-                  gamma = gamProb, 
-                  multinom = multinomProb, 
+                  gamma = gamProb,
+                  multinom = multinomProb,
                   binom = binomProb
                   )
     prob = lffuns[[type]]()
@@ -298,7 +331,7 @@ relativeRiskPermutationTest <- function(df, eventColumn, conditioningColumn, num
     return(permutedRR)
   }
   RRs = replicate(permRR, numPermutations)
-  
+
   return(RRs)
 }
 
@@ -329,7 +362,7 @@ jointEval = function(df, metadf){
     bind_rows(summarise(.,
                         across(where(is.numeric), sum),
                         across(where(is.character), ~"Total")))
-  
+
   return(resdf)
 }
 
@@ -358,7 +391,33 @@ evalSub = function(df,subIds,idCol,metadf){
   return(res)
 }
 
-multiEval = function(df,candidates,idCol, colbinds, mp = TRUE){
+
+#' multiEval: evaluate many samples against a population
+#'
+#' This function evaluates the similarity between a population of data and many candidate sub/re-samples of rows in the population
+#' Similarity between the two is measured by the log-likelihood that the sample resembles the population data,
+#' according to the variables contained in columns of df, specified in colbinds
+#'
+#' @param df is the population dataframe. df needs to have a column matching idCol, as well as a column for each column named in colbinds
+#' @param candidates is a matrix of ids for the candidate subsamples. Each column is an iteration, each row is an ID in the subsample
+#' @param idCol is the string for the ID column that identifies each row
+#' @param colbinds is a named list, where each item is a the name of a column in df,
+#' and each corresponding name is the string-identifier for the distribution used to model the variable in the column
+#' distributions and their identifiers:
+#' -multinomial: 'multinom'
+#' -binomial: 'binom'
+#' -normal: 'norm'
+#' -gamma: 'gamma'
+#' @param mp is a boolean argument to specify if you wnat to parallelize execution across subsamples
+#' @returns outdf a dataframe where each row is an iteration in candidates,
+#' with the following columns:
+#' -iterno: the iteration id
+#' -ids: a list of the row ids in the sample
+#' -LLR: the log-likelihood ratio; the (log) likelihood of the population (LoP) data given the subsample's paramter estimates, divided by LoP given the population's parameter estimates
+#' -KLD: Kullback-leibler divergence between the sample's distributions and the population's distributions
+#' @seealso [generateAutoSamples()], [generateCandidateSubSamples()], which return matrices that can be input into candidates
+#' @examples multiEval(population_df,candidate_matrtix,'IDs', colbinds)
+multiEval = function(df, candidates, idCol, colbinds, mp = TRUE){
   fullmetadf = getPrmsDf(df,colbinds)
   outdf = as.data.frame(t(candidates)) %>%
     mutate(iterno = 1) %>%
@@ -367,31 +426,31 @@ multiEval = function(df,candidates,idCol, colbinds, mp = TRUE){
     group_by(iterno) %>%
     summarise(id = list(id)) %>%
     rename(!!idCol := id)
-  
+
   fun = function(x) evalSub(df,x,idCol,fullmetadf)
   if(mp == TRUE){
     ncores = detectCores() - 2
-    res = mclapply(outdf$caseNo,fun, mc.cores = ncores, mc.progress = TRUE)
+    res = mclapply(outdf[idCol],fun, mc.cores=ncores)#, mc.progress = TRUE)
   } else {
-    res = lapply(outdf$caseNo, fun)
+    res = lapply(outdf[idCol], fun)
   }
   res = bind_rows(res)
   outdf = cbind(outdf, res)
   return(outdf)
 }
-  
+
 ###code for subsample size optimization
 itersampsize <- function(df, idCol, colbinds, nIter, min_samps, max_samps){
-  ncores = detectCores()/2 
+  ncores = detectCores()/2
   nSamps = seq(min_samps, max_samps, 10) #make a vector spanning min and max samps, skipping every x
   fun = function(nS){
     candidates = generateCandidateSubSamples(df[[idCol]],nS,nIter)
-    res = multiEval(df, candidates, idCol, colbinds, mp=FALSE)  
+    res = multiEval(df, candidates, idCol, colbinds, mp=FALSE)
     res$nSamps = nS
     message(paste("testing ", nS, " samples"))
     return(res)
   }
-  fullres = mclapply(nSamps, fun, mc.cores = ncores, mc.progress = TRUE)
+  fullres = mclapply(nSamps, fun, mc.cores = ncores)#, mc.progress = TRUE)
   fullres = bind_rows(fullres)
   return(fullres)
 }
@@ -428,18 +487,17 @@ get_old_case_nos = function(fn){
 
 #returns the best subsample for cases containing a specific action code (subsetCode)
 #with size of nSamps from nIter iterations
-
 makeSubsetFrame = function(burgerDocuments, subcases, ac, label){
   subFrame = burgerDocuments %>%
     group_by(id) %>%
     filter(ac %in% unlist(action_code)) %>%
-    filter(caseNo %in% unlist(subcases)) %>%
+    filter(ids %in% unlist(subcases)) %>%
     distinct() %>%
     mutate(justice_name = paste(unlist(justice_name)),
            caseName = paste(unlist(caseName),collapse = ";"),
            action_code = paste(action_code)) %>%
     distinct()
-  
+
   filename = paste("action",ac,label,"subset.csv",sep="")
   write_csv(subFrame, filename)
   return(subFrame)
@@ -457,8 +515,8 @@ model_samp_size = function(df, col){
   #fit exponential decay curve to the data for best model, then perform Kneedle algorithm to find point of maximum curvature
   #THANK YOU MENG XU on RPUBS
   col = as.symbol(col)
-  
-  model0 <- eval(bquote(lm(log(.(col)) ~ nSamps, data = df))) #lm(log(bestKLD - theta0) ~ n_samps, data=bestkls) 
+
+  model0 <- eval(bquote(lm(log(.(col)) ~ nSamps, data = df))) #lm(log(bestKLD - theta0) ~ n_samps, data=bestkls)
   alpha0 = exp(coef(model0)[1])
   beta0 = coef(model0)[2]
   start = list(alpha = alpha0, beta = beta0)#, theta = theta0)
@@ -490,7 +548,7 @@ plot_kls_model = function(bestkls, model, ac, tag = NULL){
   n_samps = bestkls$n_samps
   y_pred = predict(model, new_data = bestkls)
   bestkls$y_pred = y_pred
-  
+
   scale = max(bestkls$bestKLD) / max(bestkls$curvature)
   kldVsNbest = ggplot(data=bestkls)+
     geom_point(aes(x=n_samps, y=bestKLD))+
