@@ -192,6 +192,11 @@ dbinomlogProb = function(params){
   # }
 }
 
+dpoisslogProb = function(col, params){
+  prob = dpois(col, lambda = params[1])
+  return(prob)
+}
+
 getProb = function(col,params,type){
   if(all(!is.na(params))){
     normProb = function() dnormlogProb(col, params)
@@ -199,12 +204,13 @@ getProb = function(col,params,type){
     gamProb = function() dgammalogProb(col, params)
     multinomProb = function() return(log(params))
     binomProb = function() dbinomlogProb(params)
-
+    poissProb = function() dpoisslogProb(col, params)
     lffuns = list(norm = normProb,
                   groupednorm = groupnormProb,
                   gamma = gamProb,
                   multinom = multinomProb,
-                  binom = binomProb
+                  binom = binomProb,
+                  poiss = poissProb
                   )
     prob = lffuns[[type]]()
     return(prob)
@@ -349,8 +355,8 @@ generateAutoSamples = function(idcol, nIter){
   return(candidates)
 }
 
-jointEval = function(df, metadf){
-  resdf = metadf %>%
+jointEval = function(df, joinmetadf){
+  resdf = joinmetadf %>%
     group_by(cols) %>%
     mutate(fGf_LL = list(getLogLike(unlist(df[cols]),unlist(prms),distnms)),
            fGs_LL = list(getLogLike(unlist(df[cols]),unlist(subprms),distnms)),
@@ -377,16 +383,28 @@ evalSingleSub = function(df,subIds,idCol,colbinds){
   return(res)
 }
 
+#' evalsub evaluates the similarity between a subsample and the population
+#'
+#' @param df is the population dataframe
+#' @param subIds is a list of the IDs in idCol of df that compose the subsample
+#' @param idCol is a string of the column name for the id column
+#' @param metadf is the metadata dataframe, with columns:
+#' cols: a column of strings naming the columns used to model the population
+#' distnms: a column of strings naming the distributions used to model the variable specified by the corresponding entry in cols
+#' prms: a column of lists, where each list contains the parameters for the population data for the variable specified by the row
+
 evalSub = function(df,subIds,idCol,metadf){
+  subIds = unlist(subIds)
   sub = df %>%
     group_by(!!sym(idCol)) %>%
     filter(!!sym(idCol) %in% subIds)
+  print(sub)
   colbinds = setNames(metadf$distnms,metadf$cols)
-  submetadf = getPrmsDf(sub,colbinds,flag = 'sub')
-  metadf = merge(metadf,submetadf, by = c("cols","distnms"))
-  metadf = jointEval(df,metadf)
-  KLD = tail(metadf$f_KLD,1)
-  LLR = tail(metadf$f_LLR,1)
+  submetadf = getPrmsDf(sub,colbinds,flag = 'sub') #creation of a metadf-equivalent for the subsample, where column 'prms' becomes 'subprms'
+  joinmetadf = merge(metadf,submetadf, by = c("cols","distnms"))
+  joinmetadf = jointEval(df,joinmetadf)
+  KLD = tail(joinmetadf$f_KLD,1)
+  LLR = tail(joinmetadf$f_LLR,1)
   res = c('LLR' = LLR, 'KLD' = KLD)
   return(res)
 }
@@ -427,12 +445,15 @@ multiEval = function(df, candidates, idCol, colbinds, mp = TRUE){
     summarise(id = list(id)) %>%
     rename(!!idCol := id)
 
+  subIds = outdf[[idCol]]
+  print(subIds)
   fun = function(x) evalSub(df,x,idCol,fullmetadf)
   if(mp == TRUE){
     ncores = detectCores() - 2
-    res = mclapply(outdf[idCol],fun, mc.cores=ncores)#, mc.progress = TRUE)
+    print(ncores)
+    res = mclapply(subIds,fun, mc.cores=ncores)#, mc.progress = TRUE)
   } else {
-    res = lapply(outdf[idCol], fun)
+    res = lapply(subIds, fun)
   }
   res = bind_rows(res)
   outdf = cbind(outdf, res)

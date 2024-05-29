@@ -12,7 +12,7 @@ cols = c('n_docs','term','nytSalience','cqSalience','unanimous')
 distnms = c('poiss','multinom','binom','binom','binom')
 colbinds = setNames(distnms, cols)
 
-auto400cands = generateAutoSamples(BCOWD400$caseNo, 10000)
+auto400cands = generateAutoSamples(BCOWD400$caseNo, 1000)
 auto400 = multiEval(BCOWD400,auto400cands,'caseNo',colbinds)
 auto400 = auto400 %>%
   mutate(LambdaLR = -2*LLR,
