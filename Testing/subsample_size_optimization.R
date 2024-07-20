@@ -99,7 +99,7 @@ logthresh = round(log(-thresh),2)
 ggplot(data = opti400, aes(x=nSamps, y=log(-LLR)))+
   geom_point(alpha=0.1)+
   stat_summary(fun=mean, geom="line", color="blue") +
-  geom_smooth(method="lm") +
+  geom_smooth(method="lm", color="green") +
   geom_hline(yintercept=logthresh) +
   geom_label(aes(y=logthresh, hjust='left', vjust='bottom', x=100, label=paste("Null-dist. 50th %-tile:", logthresh))) +
   ylab("Log negative log-likelihood ratio") +
@@ -137,11 +137,36 @@ modelopti = opti400 %>%
          LLR100k = qnorm(1/100000, mean=lmeanLLR, sd=lsdLLR))
 
 
-ggplot() +
-  geom_line(data = modelopti, aes(x=nSamps, y=est_n_iter)) +
-  ylim(0, 1e+04) +
-  xlab("number of subsamples") +
-  ylab("est. # iterations to achieve threshold")
+opti400 = opti400 %>%
+  mutate(LLLR = log(-LLR))
+linear_model <- lm(LLLR ~ nSamps, data = opti400)
+predictions <- predict(linear_model, newdata = data.frame(nSamps = opti400$nSamps), interval = "prediction", level = 1 - 1/100000)
+# Create a new dataframe with the predictions
+prediction_df <- data.frame(nSamps = opti400$nSamps, fit = predictions[, "fit"], lwr = predictions[, "lwr"], upr = predictions[, "upr"])
+
+mean_df <- opti400 %>%
+  group_by(nSamps) %>%
+  summarise(mean_LLLR = mean(LLLR))
+
+# Plot the data, mean line, and lower bound quantile line
+ggplot(opti400, aes(x = nSamps, y = LLLR)) +
+  geom_point(alpha = 0.3) +  # Scatter plot of all observations
+  geom_line(data = mean_df, aes(x = nSamps, y = mean_LLLR, color='data average')) +  # Mean line
+  geom_line(data = prediction_df, aes(x = nSamps, y = lwr, color='est. best LLLR after\n100k iterations')) +  # Lower bound quantile line
+  geom_hline(aes(yintercept=logthresh, color='Null-dist. 50th %-tile')) +
+  #geom_label(aes(y=logthresh, hjust='left', vjust='top', x=100, label=paste("Null-dist.\n50th %-tile:\n", logthresh))) +
+  labs(title = "Distance to population vs sample-size",
+       x = "nSamps",
+       y = "LLLR") +
+  scale_color_manual(name='Regression Model',
+                     breaks=c('Null-dist. 50th %-tile', 'data average', 'est. best LLLR after\n100k iterations'),
+                     values=c('Null-dist. 50th %-tile'='green', 'data average'='blue', 'est. best LLLR after\n100k iterations'='red'))
+
+fnsvg = paste(folder, "LLLRvsNSamps.svg", sep="/")
+fnpng = paste(folder, "LLLRvsNSamps.png", sep="/")
+ggsave(fnsvg, width=6, height=4)
+ggsave(fnpng, width=6, height=4)
+
 
 #idea number 1: change itersampsize to iterate in a half-halving algorithm instead of in order, going up a half if the iteration is successful, down if it fails
 #idea number 2: model each iteration using a gaussian, which can then be used to model the probability of a successful iteration in n-iterations
