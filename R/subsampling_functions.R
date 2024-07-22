@@ -7,6 +7,7 @@ library(parallel)
 #library(bettermc)
 library(MASS)
 library(minpack.lm)
+library(parallel)
 
 
 #' get multinom params

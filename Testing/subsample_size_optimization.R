@@ -56,18 +56,7 @@ fnpng = paste(folder, "LLR_null_dist.png", sep="/")
 ggsave(fnsvg, width=6, height=4)
 ggsave(fnpng, width=6, height=4)
 
-#plot a histogram of the LLRs in auto400
-ggplot() +
-  geom_histogram(data = auto400, aes(x=exp(LLR))) +
-  geom_vline(xintercept =exp(thresh)) +
-  geom_label(aes(x=exp(thresh), y=0, hjust='left', vjust='bottom', label=paste("50th %-tile:", exp(thresh)))) +
-  ylab("count") +
-  xlab("Log-Likelihood Ratio") +
-  expand_limits(x=0)+
-  coord_flip() +
-  ggtitle("null-distribution of LLR")
-
-#plot a histogram
+#plot a histogram of the log-normal distribution of the LLRs
 ggplot() +
   geom_histogram(data = auto400, aes(x=log(-LLR))) +
   geom_vline(xintercept = log(-thresh)) +
@@ -94,38 +83,6 @@ fnpng = paste(folder, "LLRvsNSamps.png", sep="/")
 ggsave(fnsvg, width=6, height=4)
 ggsave(fnpng, width=6, height=4)
 
-
-logthresh = round(log(-thresh),2)
-ggplot(data = opti400, aes(x=nSamps, y=log(-LLR)))+
-  geom_point(alpha=0.1)+
-  stat_summary(fun=mean, geom="line", color="blue") +
-  geom_smooth(method="lm", color="green") +
-  geom_hline(yintercept=logthresh) +
-  geom_label(aes(y=logthresh, hjust='left', vjust='bottom', x=100, label=paste("Null-dist. 50th %-tile:", logthresh))) +
-  ylab("Log negative log-likelihood ratio") +
-  xlab("Sub-sample size") +
-  ggtitle("Sub-sample size vs distance to population after 100 iterations")
-fnsvg = paste(folder, "LogLLRvsNSamps.svg", sep="/")
-fnpng = paste(folder, "LogLLRvsNSamps.png", sep="/")
-ggsave(fnsvg, width=6, height=4)
-ggsave(fnpng, width=6, height=4)
-
-expthresh = exp(thresh)
-ggplot(data = opti400, aes(x=nSamps, y=exp(LLR)))+
-  geom_point(alpha=0.1)+
-  stat_summary(fun=mean, geom="line", color="blue") +
-  geom_hline(yintercept=expthresh) +
-  geom_label(aes(y=expthresh, hjust='left', vjust='top', x=100, label=paste("Null-dist. 50th %-tile:\n", round(expthresh,10)))) +
-  ylim(0, expthresh)+
-  ylab("likelihood ratio") +
-  xlab("Sub-sample size") +
-  ggtitle("Sub-sample size vs distance to population after 100 iterations")
-fnsvg = paste(folder, "LRvsNSamps.svg", sep="/")
-fnpng = paste(folder, "LRvsNSamps.png", sep="/")
-ggsave(fnsvg, width=6, height=4)
-ggsave(fnpng, width=6, height=4)
-
-
 modelopti = opti400 %>%
   group_by(nSamps) %>%
   summarise(lmeanLLR = mean(log(-LLR), na.rm=TRUE),
@@ -135,7 +92,6 @@ modelopti = opti400 %>%
          LLR1k =
          LLR10k = qnorm(1/10000, mean=lmeanLLR, sd=lsdLLR),
          LLR100k = qnorm(1/100000, mean=lmeanLLR, sd=lsdLLR))
-
 
 opti400 = opti400 %>%
   mutate(LLLR = log(-LLR))
@@ -148,81 +104,51 @@ mean_df <- opti400 %>%
   group_by(nSamps) %>%
   summarise(mean_LLLR = mean(LLLR))
 
+logthresh = round(log(-thresh),2)
+test = prediction_df %>%
+  filter(lwr < logthresh)
+minsamps = min(test$nSamps)
+
 # Plot the data, mean line, and lower bound quantile line
 ggplot(opti400, aes(x = nSamps, y = LLLR)) +
   geom_point(alpha = 0.3) +  # Scatter plot of all observations
   geom_line(data = mean_df, aes(x = nSamps, y = mean_LLLR, color='data average')) +  # Mean line
-  geom_line(data = prediction_df, aes(x = nSamps, y = lwr, color='est. best LLLR after\n100k iterations')) +  # Lower bound quantile line
   geom_hline(aes(yintercept=logthresh, color='Null-dist. 50th %-tile')) +
-  #geom_label(aes(y=logthresh, hjust='left', vjust='top', x=100, label=paste("Null-dist.\n50th %-tile:\n", logthresh))) +
-  labs(title = "Distance to population vs sample-size",
-       x = "nSamps",
-       y = "LLLR") +
-  scale_color_manual(name='Regression Model',
-                     breaks=c('Null-dist. 50th %-tile', 'data average', 'est. best LLLR after\n100k iterations'),
-                     values=c('Null-dist. 50th %-tile'='green', 'data average'='blue', 'est. best LLLR after\n100k iterations'='red'))
-
+  geom_line(data = prediction_df, aes(x = nSamps, y = lwr, color='est. best LLLR after\n100k iterations')) +  # Lower bound quantile line
+  geom_vline(aes(xintercept=minsamps, color='est. minimum\nsub-sample size')) +
+  labs(title = "Distance to population vs sample-size") +
+  xlab("sub-sample size") +
+  ylab("log(-LLR)") +
+  theme(legend.position="bottom",legend.title=element_blank())
 fnsvg = paste(folder, "LLLRvsNSamps.svg", sep="/")
 fnpng = paste(folder, "LLLRvsNSamps.png", sep="/")
 ggsave(fnsvg, width=6, height=4)
 ggsave(fnpng, width=6, height=4)
+#conclusion: we need 300 auto-samples across 100k iterations
+#side idea number 1: change itersampsize to iterate in a half-halving algorithm instead of in order, going up a half if the iteration is successful, down if it fails
+#side idea number 2: [DONE] model each iteration using a gaussian, which can then be used to model the probability of a successful iteration in n-iterations
 
 
-#idea number 1: change itersampsize to iterate in a half-halving algorithm instead of in order, going up a half if the iteration is successful, down if it fails
-#idea number 2: model each iteration using a gaussian, which can then be used to model the probability of a successful iteration in n-iterations
+candidates = generateCandidateSubSamples(BCOWD400$caseNo, 300, 100000)
+cand_evals = multiEval(BCOWD400, candidates, 'caseNo', colbinds)
 
-
-testcases = opti400$caseNo[1]
-testres = evalSingleSub(BCOWD400,unlist(testcases),'caseNo',colbinds)
-
-  group_by(nSamps) %>%
+best_subsample = cand_evals %>%
   filter(LLR == max(LLR))
-write_csv(bestopti400, 'bestopti400.csv')
+best_LLR = best_subsample$LLR
 
-opti400test = opti400 %>%
-  mutate(LambdaLR = LLR*-2)
-model400LambdaLR = model_samp_size(bestopti400, 'LambdaLR')
-curve = get_max_curve(model400LambdaLR)
-
-model400KLD= model_samp_size(bestopti400, 'KLD')
-curve = get_max_curve(model400KLD)
-
-BCOWD400sal = BCOWD400 %>%
-  ungroup() %>%
-  filter(nytSalience == TRUE)
-
-auto40salcands = generateAutoSamples(BCOWD400sal$caseNo, 20000)
-auto400sal = multiEval(BCOWD400sal, auto400salcands, 'caseNo', colbinds)
-auto400sal = auto400sal %>%
-  mutate(LambdaLR = -2*LLR,
-         LR = exp(LLR))
-pctiles400salKLD = quantile(auto400sal$KLD, c(0.05,0.5,0.95))
-pctiles400salLambdaLR = quantile(auto400sal$LambdaLR, c(0.05,0.5,0.95))
-
-
-BCOWD410 = BCOWDCases %>%
-  filter(410 %in% unlist(action_code))
-auto410cands = generateAutoSamples(BCOWD410$caseNo, 20000)
-auto410 = multiEval(BCOWD410, auto410cands, 'caseNo', colbinds)
-auto410 = auto410 %>%
-  mutate(LambdaLR = -2*LLR,
-         LR = exp(LLR))
-pctiles410KLD = quantile(auto410$KLD, c(0.05,0.5,0.95))
-pctiles410LambdaLR = quantile(auto410$LambdaLR, c(0.05,0.5,0.95))
-
-BCOWD410 = BCOWDCases %>%
-  group_by(caseNo) %>%
-  filter(410 %in% unlist(action_code))
-cols = c('n_docs','term','nytSalience','cqSalience','unanimous')
-distnms = c('gamma','groupednorm','binom','binom','binom')
-colbinds = setNames(distnms, cols)
-opti410 = itersampsize(BCOWD410, 'caseNo', colbinds, 1000, 20,350)
-testcases = opti410$caseNo[1]
-testres = evalSingleSub(BCOWD410,unlist(testcases),'caseNo',colbinds)
-bestopti410 = opti410 %>%
-  mutate(LR = exp(LLR),
-         LambdaLR = -2*LLR,
-         score = LLRT+KLD) %>%
-  group_by(nSamps) %>%
-  filter(score == max(LLR))
-write_csv(bestopti410, 'bestopti410.csv')
+#plot a histogram of the LLRs in auto400
+ggplot() +
+  geom_histogram(data = auto400, aes(x=LLR)) +
+  geom_vline(aes(xintercept = thresh, color = 'null-dist. 50th %-tile')) +
+  #geom_label(aes(x=thresh, y=0, hjust='left', vjust='bottom', label=paste("50th %-tile:", round(thresh,2)))) +
+  geom_vline(aes(xintercept = best_LLR, color='sub-sample LLR'))+
+  ylab("count") +
+  xlab("Log-Likelihood Ratio") +
+  theme(legend.position="bottom",legend.title=element_blank()) +
+  expand_limits(x=0)+
+  coord_flip() +
+  ggtitle("null-distribution of LLR")
+fnsvg = paste(folder, "LLR_null_dist_w_subsample.svg", sep="/")
+fnpng = paste(folder, "LLR_null_dist_w_subsample.png", sep="/")
+ggsave(fnsvg, width=6, height=4)
+ggsave(fnpng, width=6, height=4)
