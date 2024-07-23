@@ -36,10 +36,10 @@ Simply put, repsubsamp integrates tools for:
 3) calculating the null-distribution of resamples' similarity to population data, and using it to benchmark the "representativeness" of a sub-sample 
 
 
-## Distance metric
+## Similarity metric
 
-The Likelihood-ratio test statistic used to quantify distance of a subsample to the population ($\lambda_{LR}$), 
- equals the log of the product of the likelihood ratios 
+The Likelihood-ratio test statistic used to quantify similarity of a subsample to the population ($\lambda_{LR}$), 
+which equals the log of the product of the likelihood ratios 
 across each norming variable *i* of *n* possible norming variables, 
 where a variable’s likelihood ratio equals the likelihood 
 $(\mathcal{L})$ of the population data $(x_0)$ given the parameter 
@@ -51,6 +51,7 @@ $$
 \lambda_{LLR}=\ln{\left[\prod_{i=1}^{n}\frac{\mathcal{L}_i\left(\theta_0|x_0\right)}{\mathcal{L}_i\left(\theta_s|x_0\right)}\right]}\ 
 $$
 
+The closer the $\lambda_{LLR}$ is to zero, the more similar the subsample is to the population data.
 
 ## Example Pipeline
 
