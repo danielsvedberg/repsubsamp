@@ -38,14 +38,14 @@ Simply put, repsubsamp integrates tools for:
 
 ## Distance metric
 
-The Likelihood-ratio test statistic used to quantify distance of a subsample to the population ($ \lambda_{LR} $), 
+The Likelihood-ratio test statistic used to quantify distance of a subsample to the population ($\lambda_{LR}$), 
  equals the log of the product of the likelihood ratios 
 across each norming variable *i* of *n* possible norming variables, 
 where a variable’s likelihood ratio equals the likelihood 
-$ (\mathcal{L}) $ of the population data $ (x_0) $ given the parameter 
-estimates generated from the entire population $ (\theta_0) $, 
-divided by the \mathcal{L} of x_0 given the parameter estimates 
-generated from the sample $ (\theta_s) $ :
+$(\mathcal{L})$ of the population data $(x_0)$ given the parameter 
+estimates generated from the entire population $(\theta_0)$, 
+divided by the $\mathcal{L}$ of $x_0$ given the parameter estimates 
+generated from the sample $(\theta_s)$:
 
 $$ 
 \lambda_{LLR}=\ln{\left[\prod_{i=1}^{n}\frac{\mathcal{L}_i\left(\theta_0|x_0\right)}{\mathcal{L}_i\left(\theta_s|x_0\right)}\right]}\ 
