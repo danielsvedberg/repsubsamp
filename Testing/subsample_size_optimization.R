@@ -4,18 +4,16 @@ library(stringr)
 library(fitdistrplus)
 
 source("R/subsampling_functions.R") #load the sub sampling functions
-source("Testing/example_preprocessing.R") #load and preprocess the test data
-#critically, the pre-processing makes it so each row represents a unique case
-
 folder = paste(getwd(), "Testing", sep="/")
+BCOWDCases = read_csv("data_raw/BCOWDCases.csv")
+#critically, the pre-processing makes it so each row represents a unique case
 
 ################################################################################
 #example 1: get the cases with code 400 and subsample them
 ################################################################################
 #extract cases from BCOWD with code 400
 BCOWD400 = BCOWDCases %>%
-  group_by(caseNo) %>%
-  filter(400 %in% unlist(action_code))
+  filter(str_detect(action_code, '400'))
 
 #set the column bindings by creating named list linking column names to distribution names
 cols = c('n_docs','term','nytSalience','cqSalience','unanimous') #list of columns to be modeled
@@ -29,16 +27,11 @@ colbinds = setNames(distnms, cols) #make a named list where each distribution la
 auto400cands = generateAutoSamples(BCOWD400$caseNo, 1000)
 #multiEval calculates the distance between the population and each sample in the matrix, according the columns specified in colbinds
 auto400 = multiEval(BCOWD400,auto400cands,'caseNo',colbinds) #characterize the distance of each autosample to the population
+auto400 = lists_to_text(auto400)
 
 ###characterize null distribution:
 #get the 95% confidence interval of the distances for:
 percentiles400LLR = quantile(auto400$LLR, c(0.025,0.5,0.975)) #Log-likelihood ratio
-percentiles400KLD = quantile(auto400$KLD, c(0.025,0.5,0.975)) #Kullback-Leibler divergence
-
-###iteratively optimize sample size
-#itersampsize takes the dataframe, id column name (str), column bindings (named list)
-#number of repeats per iteration (int), minimum sub-sample size (int), and maximum sub-sample size (int)
-opti400 = itersampsize(BCOWD400, 'caseNo', colbinds, 80, 100, 700)
 thresh = percentiles400LLR['50%']
 
 #plot a histogram of the LLRs in auto400
@@ -69,6 +62,12 @@ fnpng = paste(folder, "LogLLR_null_dist.png", sep="/")
 ggsave(fnsvg, width=6, height=4)
 ggsave(fnpng, width=6, height=4)
 
+###iteratively optimize sample size
+#itersampsize takes the dataframe, id column name (str), column bindings (named list)
+#number of repeats per iteration (int), minimum sub-sample size (int), and maximum sub-sample size (int)
+opti400 = itersampsize(BCOWD400, 'caseNo', colbinds, 80, 100, 700)
+
+
 #plot opti vs LLR
 ggplot(data = opti400, aes(x=nSamps, y=LLR))+
   geom_point(alpha=0.1)+
@@ -83,13 +82,13 @@ fnpng = paste(folder, "LLRvsNSamps.png", sep="/")
 ggsave(fnsvg, width=6, height=4)
 ggsave(fnpng, width=6, height=4)
 
+
 modelopti = opti400 %>%
   group_by(nSamps) %>%
   summarise(lmeanLLR = mean(log(-LLR), na.rm=TRUE),
             lsdLLR = sd(log(-LLR), na.rm=TRUE)) %>%
   mutate(prob_thresh = pnorm(log(-thresh), mean=lmeanLLR, sd=lsdLLR, lower.tail=TRUE),
          est_n_iter = 1/prob_thresh,
-         LLR1k =
          LLR10k = qnorm(1/10000, mean=lmeanLLR, sd=lsdLLR),
          LLR100k = qnorm(1/100000, mean=lmeanLLR, sd=lsdLLR))
 

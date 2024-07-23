@@ -67,5 +67,22 @@ BCOWDCases = BCOWDCases %>%
   unite(caseNo, usVol:usPg, remove = FALSE) %>%
   mutate(n_cases = n())
 
+lists_to_text <- function(df) {
+  # Iterate through each column in the dataframe
+  for (col in colnames(df)) {
+    # Check if the column is of list type
+    if (is.list(df[[col]])) {
+      # Convert the list to character type
+      df[[col]] <- sapply(df[[col]], function(x) paste(x, collapse = ";"))
+    }
+  }
+  return(df)
+}
+
+for_save = lists_to_text(BCOWDCases)
+
+write_csv(for_save, file = "data_raw/BCOWDCases.csv")
+
+test = read_csv("data_raw/BCOWDCases.csv")
 
 

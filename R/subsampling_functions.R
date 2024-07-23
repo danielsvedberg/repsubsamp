@@ -56,6 +56,12 @@ get_binom_params = function(col){
   return(params)
 }
 
+get_exp_params = function(col){
+  lam = 1/mean(col)
+  params = c('lambda'=lam)
+  return(params)
+}
+
 get_norm_params = function(col){
   mean = mean(col, na.rm=TRUE)
   sd = sd(col, na.rm=TRUE)
@@ -86,7 +92,8 @@ getLikeParams= function(col, type){
                   gamma = get_gamma_params,
                   binom = get_binom_params,
                   norm = get_norm_params,
-                  multinom = get_multinom_params)
+                  multinom = get_multinom_params,
+                  exp = get_exp_params,)
   fun = prmsfuns[[type]]
   prms = fun(col)
   return(prms)
@@ -127,6 +134,11 @@ dnormLogLike = function(col,params){
   return(like)
 }
 
+dexpLogLike = function(col, params){
+  like = dexp(col, params[1], log = TRUE)
+  return(liike)
+}
+
 dpoissLogLike = function(col, params){
   like = sum(log((params[1]^col * exp(-params[1])) / factorial(col)))
   return(like)
@@ -140,7 +152,8 @@ getLogLike = function(col,params,type){
     dbinomlog = function() dbinomLogLike(col, params)
     dpoisslog = function() dpoissLogLike(col, params)
     dgroupnormlog = function() dgroupnormLogLike(col, params)
-    lffuns = list(gamma = dgamlog, binom = dbinomlog, norm = dnormlog, multinom = dmultinomlog, groupednorm = dgroupnormlog, poiss = dpoisslog)
+    dexplog = function() dexpLogLike(col, params)
+    lffuns = list(exp = dexplog, gamma = dgamlog, binom = dbinomlog, norm = dnormlog, multinom = dmultinomlog, groupednorm = dgroupnormlog, poiss = dpoisslog)
     like = lffuns[[type]]()
     return(like)
   } else{
@@ -193,6 +206,11 @@ dbinomlogProb = function(params){
   # }
 }
 
+dexplogProb = function(col, params){
+  prob = dexp(col, rate = params[1])
+  return(prob)
+}
+
 dpoisslogProb = function(col, params){
   prob = dpois(col, lambda = params[1])
   return(prob)
@@ -206,7 +224,9 @@ getProb = function(col,params,type){
     multinomProb = function() return(log(params))
     binomProb = function() dbinomlogProb(params)
     poissProb = function() dpoisslogProb(col, params)
-    lffuns = list(norm = normProb,
+    expProb = function() dexplogProb(col, params)
+    lffuns = list(exp = expProb,
+                  norm = normProb,
                   groupednorm = groupnormProb,
                   gamma = gamProb,
                   multinom = multinomProb,
