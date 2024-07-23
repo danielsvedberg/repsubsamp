@@ -193,8 +193,8 @@ will achieve the similarity threshold.
 
 Consider that the similarity of a subsample to the population data is stochastic;
 therefore, the likelihood that a subsample achieves the similarity threshold
-is a function of both the subsample size *and the number of iterations*. Ergo, increasing the number of 
-also increases the likelihood that a smaller subsample can reach the similarity threshold. 
+is a function of both the subsample size *and the number of iterations*. Ergo, increasing the number 
+of iterations also increases the likelihood that a smaller subsample can reach the similarity threshold. 
 
 The distribution of subsample similarities across iterations enables us to forecast the highest
 similarity achievable for every subsample size, given a chosen number of iterations.
