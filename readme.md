@@ -1,9 +1,11 @@
 # Repsubsamp: extraction and validation of "representative" subsamples
-Daniel A. Svedberg (2024)
+Daniel A. Svedberg, Isaiah W. Ogren (2024)
 ## Introduction
 Data is often delivered in a dataframe format, 
-but sometimes we need to extract a subsample from these data, 
+but sometimes we need to extract a smallest-possible subsample from these data, 
 while ensuring that it is "representative" of the original data. 
+This is particularly important in cases where a prospective analysis is too complex 
+and/or time-consuming to be applied to the entire dataset. (for example: hand-coded analysis of text)
 
 In our specific case, we made use of the
 [Burger Court Opinion Writing Database](http://supremecourtopinions.wustl.edu/?rt=dataset/archive)
