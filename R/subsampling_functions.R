@@ -3,7 +3,6 @@ library(lubridate) #library important for managing date-time data
 library(stringr)
 library(fitdistrplus)
 library(philentropy)
-library(parallel)
 #library(bettermc)
 library(MASS)
 library(minpack.lm)
@@ -93,7 +92,7 @@ getLikeParams= function(col, type){
                   binom = get_binom_params,
                   norm = get_norm_params,
                   multinom = get_multinom_params,
-                  exp = get_exp_params,)
+                  exp = get_exp_params)
   fun = prmsfuns[[type]]
   prms = fun(col)
   return(prms)
@@ -470,9 +469,9 @@ multiEval = function(df, candidates, idCol, colbinds, mp = TRUE){
   print(subIds)
   fun = function(x) evalSub(df,x,idCol,fullmetadf)
   if(mp == TRUE){
-    ncores = detectCores() - 2
+    ncores = parallel::detectCores() - 2
     print(ncores)
-    res = mclapply(subIds,fun, mc.cores=ncores)#, mc.progress = TRUE)
+    res = parallel::mclapply(subIds,fun, mc.cores=ncores)#, mc.progress = TRUE)
   } else {
     res = lapply(subIds, fun)
   }
@@ -483,7 +482,7 @@ multiEval = function(df, candidates, idCol, colbinds, mp = TRUE){
 
 ###code for subsample size optimization
 itersampsize <- function(df, idCol, colbinds, nIter, min_samps, max_samps){
-  ncores = detectCores()/2
+  ncores = parallel::detectCores()/2
   nSamps = seq(min_samps, max_samps, 10) #make a vector spanning min and max samps, skipping every x
   fun = function(nS){
     candidates = generateCandidateSubSamples(df[[idCol]],nS,nIter)
@@ -492,7 +491,7 @@ itersampsize <- function(df, idCol, colbinds, nIter, min_samps, max_samps){
     message(paste("testing ", nS, " samples"))
     return(res)
   }
-  fullres = mclapply(nSamps, fun, mc.cores = ncores)#, mc.progress = TRUE)
+  fullres = parallel::mclapply(nSamps, fun, mc.cores = ncores)#, mc.progress = TRUE)
   fullres = bind_rows(fullres)
   return(fullres)
 }
