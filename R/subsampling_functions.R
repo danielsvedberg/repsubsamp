@@ -86,13 +86,18 @@ get_poiss_params = function(col){
 
 #get LR returns Likelihood Ratio of L(fullcol)/l(fullcol), where L is the PDF built on fullcol data, and l is built on subcol data
 getLikeParams= function(col, type){
-  prmsfuns = list(poiss = get_poiss_params,
+  prmsfuns = list(poisson = get_poiss_params,
+                  poiss = get_poiss_params,
                   groupednorm = get_grouped_norm_params,
                   gamma = get_gamma_params,
                   binom = get_binom_params,
+                  binomial = get_binom_params,
                   norm = get_norm_params,
+                  normal = get_norm_params,
                   multinom = get_multinom_params,
-                  exp = get_exp_params)
+                  multinomial = get_multinom_params,
+                  exp = get_exp_params,
+                  exponential = get_exp_param)
   fun = prmsfuns[[type]]
   prms = fun(col)
   return(prms)
@@ -342,6 +347,7 @@ calculateRelativeRisk <- function(df, eventColumn, conditioningColumn){
   RR <- (contingencyTable[2, 2] / sum(contingencyTable[2, ])) / (contingencyTable[1, 2] / sum(contingencyTable[1, ]))
   return(RR)
 }
+
 relativeRiskPermutationTest <- function(df, eventColumn, conditioningColumn, numPermutations = 1000){
   # Calculate the observed relative risk
   observedRR <- calculateRelativeRisk(df, eventColumn, conditioningColumn)
